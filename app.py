@@ -1,68 +1,81 @@
 import streamlit as st
 from dotenv import load_dotenv
-
-load_dotenv() ##load all the nevironment variables
 import os
 import google.generativeai as genai
-
 from youtube_transcript_api import YouTubeTranscriptApi
+from urllib.parse import urlparse, parse_qs
 
+load_dotenv()  # Load environment variables
+
+# Configure Google Gemini API
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-st.set_page_config(
-    page_title="YT",
-    page_icon="🖥️",
-)
+st.set_page_config(page_title="YT", page_icon="🖥️")
 
-prompt="""You are Yotube video summarizer. You will be taking the transcript text
-and summarizing the entire video and providing the important summary in points
-within 250 words. Please provide the summary of the text given here:  """
+prompt = """You are a YouTube video summarizer. Summarize the video transcript into key points within 250 words: """
 
+# Extract video ID
+def extract_video_id(youtube_video_url):
+    try:
+        parsed_url = urlparse(youtube_video_url)
+        query_params = parse_qs(parsed_url.query)
+        if "v" in query_params:
+            return query_params["v"][0]
+        else:
+            # If the URL contains no query parameters, extract from path
+            path_parts = parsed_url.path.split("/")
+            if len(path_parts) > 1:
+                return path_parts[-1]
+        return None
+    except Exception as e:
+        st.error(f"Invalid YouTube URL: {e}")
+        return None
 
-## getting the transcript data from yt videos
+# Get transcript
 def extract_transcript_details(youtube_video_url):
     try:
-        video_id=youtube_video_url.split("=")[1]
-        
-        transcript_text=YouTubeTranscriptApi.get_transcript(video_id)
+        video_id = extract_video_id(youtube_video_url)
+        if not video_id:
+            raise ValueError("Invalid YouTube URL")
 
-        transcript = ""
-        for i in transcript_text:
-            transcript += " " + i["text"]
-
+        transcript_text = YouTubeTranscriptApi.get_transcript(video_id)
+        transcript = " ".join([i["text"] for i in transcript_text])
         return transcript
 
     except Exception as e:
-        return "Subtitles are disabled for this video. Unable to retrieve transcript."
-    
-   
-    
-    
-## getting the summary based on Prompt from Google Gemini Pro
-def generate_gemini_content(transcript_text,prompt):
+        st.error("Unable to retrieve transcript: " + str(e))
+        return None
 
-    model=genai.GenerativeModel("gemini-pro")
-    response=model.generate_content(prompt+transcript_text)
-    return response.text
+# Generate Gemini content
+def generate_gemini_content(transcript_text, prompt):
+    try:
+        model = genai.GenerativeModel("gemini-pro")
+        response = model.generate_content(prompt + transcript_text)
+        return response.text
+    except Exception as e:
+        st.error(f"Error generating summary: {e}")
+        return None
 
+# App UI
 st.title("YouTube Transcript to Detailed Notes Converter")
 youtube_link = st.text_input("Enter YouTube Video Link:")
 
-if not youtube_link:
-    st.warning("Please enter a YouTube video link.")
-
 if youtube_link:
-    video_id = youtube_link.split("=")[1]
-    print(video_id)
-    st.image(f"http://img.youtube.com/vi/{video_id}/0.jpg", use_container_width=True)
+    video_id = extract_video_id(youtube_link)
+    if video_id:
+        # Display video thumbnail
+        st.image(f"https://img.youtube.com/vi/{video_id}/0.jpg", use_container_width=True)
 
 if st.button("Get Detailed Notes"):
-    transcript_text=extract_transcript_details(youtube_link)
+    transcript_text = extract_transcript_details(youtube_link)
 
     if transcript_text:
-        summary=generate_gemini_content(transcript_text,prompt)
-        st.markdown("## Detailed Notes:")
-        st.write(summary)
+        summary = generate_gemini_content(transcript_text, prompt)
+        if summary:
+            st.markdown("## Detailed Notes:")
+            st.write(summary)
+    else:
+        st.warning("Transcript could not be retrieved. Please check the video.")
 
 # Page background styling (optional)
 page_bg_img = '''
@@ -71,10 +84,5 @@ page_bg_img = '''
             text-align: center;
         }
     </style>
-    '''
+'''
 st.markdown(page_bg_img, unsafe_allow_html=True)
-
-
-
-
-
