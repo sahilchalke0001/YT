@@ -5,7 +5,6 @@ import time
 import json
 import google.generativeai as genai
 from youtube_transcript_api import YouTubeTranscriptApi
-from youtube_transcript_api._api import TranscriptApi
 
 # Load environment variables
 load_dotenv()
